@@ -6,6 +6,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/card'
 import { formatInr, formatIst } from '@/lib/format'
 import { ROLE_LABEL } from '@/lib/labels'
 import type { Approval, ApprovalStatus, RequestDetail } from '@/lib/types'
+import { ApprovalAdviceCard } from './ApprovalAdviceCard'
 import { ApprovalDecision } from './ApprovalDecision'
 
 const TONE: Record<ApprovalStatus, BadgeTone> = {
@@ -69,6 +70,7 @@ function ApprovalRow({ a }: { a: Approval }) {
         </p>
       )}
       {a.decision_note && <p className="mt-1 text-sm">“{a.decision_note}”</p>}
+      {open && a.advice && <ApprovalAdviceCard advice={a.advice} />}
       <div className="mt-2">
         <ApprovalDecision a={a} />
       </div>

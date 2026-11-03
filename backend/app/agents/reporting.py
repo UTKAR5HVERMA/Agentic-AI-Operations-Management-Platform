@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.agents.composer import unsupported_numbers
 from app.llm import prompts
 from app.llm.client import LLMClient, LLMResult
 
@@ -62,12 +63,31 @@ def _template(m: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def summarize(metrics: dict[str, Any], llm: LLMClient) -> tuple[str, LLMResult[SummaryOut]]:
+def _rates(value: Any) -> list[float]:
+    if isinstance(value, dict):
+        return [r for v in value.values() for r in _rates(v)]
+    if isinstance(value, list):
+        return [r for v in value for r in _rates(v)]
+    return [value] if isinstance(value, float) and 0 <= value <= 1 else []
+
+
+def _percent_forms(metrics: dict[str, Any]) -> str:
+    """Rates as the LLM may write them (0.25 → '25'), so '25%' counts as a number from SQL."""
+    return " ".join(f"{v * 100:.0f} {v * 100:.1f}" for v in _rates(metrics))
+
+
+def summarize(metrics: dict[str, Any], llm: LLMClient) -> tuple[str, LLMResult[SummaryOut], bool]:
+    """(markdown, LLMResult, used_llm). LLM text whose numbers are not all in METRICS is
+    rejected and the template is used, so the summary always matches the dashboard."""
+    source = json.dumps(metrics, default=str)
     result = llm.call_json(
         prompt_name="reporting",
         system=prompts.REPORTING,
-        user="METRICS:\n" + json.dumps(metrics, default=str),
+        user="METRICS:\n" + source,
         schema=SummaryOut,
     )
-    markdown = result.data.markdown if result.data else _template(metrics)
-    return markdown, result
+    if result.data is not None and not unsupported_numbers(
+        f"{source} {_percent_forms(metrics)}", result.data.markdown
+    ):
+        return result.data.markdown, result, True
+    return _template(metrics), result, False

@@ -15,15 +15,33 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
 from app.agents.common import Timer, agent_output, ctx
+from app.agents.composer import unsupported_numbers
 from app.agents.state import CaseState
 from app.agents.validation import FIELD_LABELS
 from app.enums import CommType
 from app.llm import prompts
 from app.llm.client import LLMClient
+from app.normalize import ist_label
 
 AGENT = "communication"
 SIGNATURE = "\n\nRegards,\nOperations Team (OpsPilot)"
-LLM_TYPES = {CommType.STAKEHOLDER_UPDATE, CommType.CLARIFICATION, CommType.CLOSURE}
+LLM_TYPES = {
+    CommType.STAKEHOLDER_UPDATE,
+    CommType.CLARIFICATION,
+    CommType.CLOSURE,
+    CommType.APPROVAL_REQUEST,
+    CommType.ESCALATION,
+    CommType.REMINDER,
+}
+AUDIENCE = {
+    CommType.APPROVAL_REQUEST: "the Regional Manager who must decide this approval",
+    CommType.ESCALATION: "the person who must now decide this approval",
+    CommType.REMINDER: "the approver",
+}
+# Never given to the LLM: the forwarded original email is untrusted text, and the Operations
+# Team's note is a human's words. Both are appended verbatim after the AI-written part.
+_VERBATIM_KEYS = {"original_text", "original_from", "original_channel", "original_received_at"}
+_TIME_KEYS = {"due_at", "previous_due", "deadline_at", "required_by"}
 
 
 class DraftOut(BaseModel):
@@ -97,9 +115,19 @@ def _original_block(f: dict[str, Any]) -> str:
     quoted = "\n".join(f"> {line}" for line in str(f["original_text"]).splitlines())
     return (
         f"\n\n---------- Original request ----------\nFrom: {f.get('original_from') or 'unknown'}"
-        f" ({f.get('original_channel')})\nReceived: {f.get('original_received_at')}\n"
+        f" ({f.get('original_channel')})\nReceived: {ist_label(f.get('original_received_at'))}\n"
         f"Subject: {f.get('subject')}\n\n{quoted}"
     )
+
+
+def _note_block(f: dict[str, Any]) -> str:
+    note = f.get("routing_note")
+    return f"\n\nNote from the Operations Team:\n{note}" if note else ""
+
+
+def _advice_line(f: dict[str, Any]) -> str:
+    advice = f.get("ai_suggestion")
+    return f"\nAI suggestion (advice only, the decision is yours): {advice}" if advice else ""
 
 
 def _template(comm_type: CommType, f: dict[str, Any]) -> tuple[str, str]:
@@ -146,28 +174,26 @@ def _template(comm_type: CommType, f: dict[str, Any]) -> tuple[str, str]:
             greeting + f"Please review {ref} ({subject}).\nProposed action: "
             f"{f.get('recommendation')}\nAmount: {_inr(f.get('amount_inr'))}\nWhy approval is "
             f"required: {'; '.join(f.get('reasons', []))}\nDecision needed by: "
-            f"{f.get('due_at')}."
-            + (
-                f"\n\nNote from the Operations Team:\n{f['routing_note']}"
-                if f.get("routing_note")
-                else ""
-            )
-            + _original_block(f)
-            + SIGNATURE,
+            f"{ist_label(f.get('due_at'))}." + _advice_line(f) + SIGNATURE,
         )
     if comm_type == CommType.ESCALATION:
+        why = (
+            f"was forwarded to you by the Regional Manager: {f.get('escalation_reason')}"
+            if f.get("forwarded_by_manager")
+            else f"was not decided by {ist_label(f.get('previous_due'))}, so it has been "
+            f"escalated to you (level {f.get('level')})"
+        )
         return (
-            f"[{ref}] ESCALATION: approval overdue — {subject}",
+            f"[{ref}] ESCALATION: decision needed — {subject}",
             greeting + f'The approval for "{f.get("recommendation")}" '
-            f"({_inr(f.get('amount_inr'))}) was not decided by {f.get('previous_due')}. It has "
-            f"been escalated to you (level {f.get('level')}). New due time: {f.get('due_at')}."
-            + SIGNATURE,
+            f"({_inr(f.get('amount_inr'))}) {why}. Please decide by "
+            f"{ist_label(f.get('due_at'))}." + _advice_line(f) + SIGNATURE,
         )
     if comm_type == CommType.REMINDER:
         return (
-            f"[{ref}] Reminder: approval due {f.get('due_at')}",
+            f"[{ref}] Reminder: approval due {ist_label(f.get('due_at'))}",
             greeting + f'Reminder: "{f.get("recommendation")}" ({_inr(f.get("amount_inr"))}) '
-            f"awaits your decision by {f.get('due_at')}." + SIGNATURE,
+            f"awaits your decision by {ist_label(f.get('due_at'))}." + SIGNATURE,
         )
     if comm_type == CommType.CANCELLATION:
         return (
@@ -207,6 +233,38 @@ def _template(comm_type: CommType, f: dict[str, Any]) -> tuple[str, str]:
     )
 
 
+def _llm_facts(facts: dict[str, Any]) -> dict[str, Any]:
+    """Facts for the LLM: no verbatim parts, times already written out in IST."""
+    return {
+        k: ist_label(v) if k in _TIME_KEYS else v
+        for k, v in facts.items()
+        if k not in _VERBATIM_KEYS and k != "routing_note" and v not in (None, "", [])
+    }
+
+
+def _ask_llm(
+    comm_type: CommType, facts: dict[str, Any], llm: LLMClient, audience: str
+) -> tuple[tuple[str, str] | None, Any]:
+    """LLM draft, or None when it failed or cites numbers that are not in the facts."""
+    source = json.dumps(_llm_facts(facts), default=str)
+    result = llm.call_json(
+        prompt_name="comms",
+        system=prompts.COMMS.format(
+            comm_type=str(comm_type).replace("_", " "),
+            audience=AUDIENCE.get(comm_type, audience),
+        ),
+        user="FACTS:\n" + source,
+        schema=DraftOut,
+        temperature=0.3,
+    )
+    if result.data is None:
+        return None, result
+    subject, body = result.data.subject, _PLACEHOLDER.sub("", result.data.body).strip()
+    if unsupported_numbers(source, f"{subject}\n{body}"):
+        return None, result  # grounding check failed: use the template
+    return (subject, body), result
+
+
 def draft(
     comm_type: CommType,
     facts: dict[str, Any],
@@ -215,22 +273,16 @@ def draft(
     audience: str = "the requester",
 ) -> tuple[dict[str, Any], Any]:
     """Return (draft dict, LLMResult | None)."""
-    result = None
+    written, result = (None, None)
     if llm is not None and comm_type in LLM_TYPES:
-        result = llm.call_json(
-            prompt_name="comms",
-            system=prompts.COMMS.format(
-                comm_type=str(comm_type).replace("_", " "), audience=audience
-            ),
-            user="FACTS:\n" + json.dumps(facts, default=str),
-            schema=DraftOut,
-            temperature=0.3,
-        )
-    if result is not None and result.data is not None:
-        subject, model = result.data.subject, result.model
-        body = _PLACEHOLDER.sub("", result.data.body).strip()
+        written, result = _ask_llm(comm_type, facts, llm, audience)
+    if written is not None:
+        (subject, body), model = written, result.model
     else:
         (subject, body), model = _template(comm_type, facts), "template"
+    if comm_type == CommType.APPROVAL_REQUEST:  # human and untrusted text stay verbatim
+        body = body.removesuffix(SIGNATURE) + _note_block(facts) + _original_block(facts)
+        body += SIGNATURE if model == "template" else ""
     return {
         "type": str(comm_type),
         "to": to,

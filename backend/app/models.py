@@ -213,6 +213,8 @@ class Approval(TimestampMixin, Base):
     routing_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # The Director approved their own request with a written justification (top of the chain).
     self_approved: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # AI advice for the approver (suggestion, rationale, checks, model). Advice only.
+    advice: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     stale: Mapped[bool] = mapped_column(Boolean, default=False)
     stale_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)

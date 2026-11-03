@@ -157,8 +157,8 @@ def _critical(open_cases: list[Case]) -> list[dict[str, Any]]:
 def management_summary(db: Session, user: User) -> tuple[str, dict[str, Any], str, str]:
     metrics = dashboard(db)
     llm = LLMClient(get_settings(), llm_down=get_flags(db)["llm_down"])
-    markdown, result = reporting.summarize(metrics, llm)
-    model = result.model if result.data else "template"
+    markdown, result, used_llm = reporting.summarize(metrics, llm)
+    model = result.model if used_llm else "template"
     comm = Communication(
         type=str(CommType.MANAGEMENT_SUMMARY),
         to=[],

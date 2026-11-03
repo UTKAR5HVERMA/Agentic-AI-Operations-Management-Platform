@@ -18,8 +18,18 @@ from app import audit
 from app.agents import communication as comms_agent
 from app.config import get_settings
 from app.db import utcnow
-from app.enums import ActorType, CommStatus, CommType, IssueStatus, IssueType, Role, Severity
+from app.enums import (
+    ActorType,
+    CommStatus,
+    CommType,
+    Flag,
+    IssueStatus,
+    IssueType,
+    Role,
+    Severity,
+)
 from app.errors import conflict
+from app.faults import get_flags
 from app.llm.client import LLMClient
 from app.models import Case, Communication, Issue, User
 from app.normalize import IST
@@ -29,6 +39,10 @@ from app.services.analysis import current_fields
 MAX_ATTEMPTS = 3
 BACKOFF_MINUTES = (1, 2, 4)
 SENDABLE = {CommStatus.DRAFT, CommStatus.APPROVED, CommStatus.FAILED}
+
+
+def _llm(db: Session) -> LLMClient:
+    return LLMClient(get_settings(), llm_down=get_flags(db)[str(Flag.LLM_DOWN)])
 
 
 def recipients(db: Session, role: Role | str, region: str) -> list[str]:
@@ -108,8 +122,9 @@ def notify(
     actor: str = "system",
     **facts: Any,
 ) -> Communication:
-    """Draft from a template and send immediately (internal, system-originated messages)."""
-    d, _ = comms_agent.draft(comm_type, case_facts(case, **facts), to)
+    """AI-drafted (template fallback) and sent at once: internal messages to approvers. The LLM
+    writes only from the case facts and its numbers are checked against them."""
+    d, _ = comms_agent.draft(comm_type, case_facts(case, **facts), to, _llm(db))
     comm = create(db, case, d)
     send(db, comm, actor=actor, actor_type=ActorType.SYSTEM)
     return comm
@@ -406,8 +421,7 @@ def generate(db: Session, case: Case, comm_type: CommType, user: User) -> Commun
     if comm_type == CommType.ESCALATION:
         to = recipients(db, Role.ADMIN, case.region)
     extra = _clarify_facts(case) if comm_type == CommType.CLARIFICATION else {}
-    llm = LLMClient(get_settings())
-    d, result = comms_agent.draft(comm_type, case_facts(case, **extra), to, llm)
+    d, result = comms_agent.draft(comm_type, case_facts(case, **extra), to, _llm(db))
     if existing:
         existing.subject, existing.body, existing.model = d["subject"], d["body"], d["model"]
         _draft_audit(db, case, existing, d, result, f"Refreshed for {user.email}")

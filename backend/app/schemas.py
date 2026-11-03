@@ -227,6 +227,13 @@ class RecommendationOut(ApiModel):
     model: str
 
 
+class ApprovalAdvice(BaseModel):
+    suggestion: Literal["approve", "reject", "forward"]
+    rationale: str
+    checks: list[str] = []
+    model: str
+
+
 class ApprovalOut(BaseModel):
     id: str
     request_id: str
@@ -248,6 +255,7 @@ class ApprovalOut(BaseModel):
     routing_note: str | None
     self_approved: bool = False
     needs_self_override: bool = False  # the Director raised it: approve only with a justification
+    advice: ApprovalAdvice | None = None  # AI suggestion for the approver; they decide
     stale: bool
     stale_reason: str | None
     risk_level: str | None

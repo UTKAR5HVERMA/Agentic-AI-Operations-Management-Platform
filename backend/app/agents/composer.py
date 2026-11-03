@@ -45,7 +45,8 @@ def unsupported_numbers(source: str, output: str) -> set[str]:
     derivable = {a + b for a in values for b in values} | {
         abs(a - b) for a in values for b in values
     }
-    return {n for n in _numbers(output) - src if float(n) not in derivable}
+    known = set(values) | derivable  # "05 Nov" in the source supports "5 Nov" in the output
+    return {n for n in _numbers(output) - src if float(n) not in known}
 
 
 def introduces_new_numbers(source: str, output: str) -> bool:

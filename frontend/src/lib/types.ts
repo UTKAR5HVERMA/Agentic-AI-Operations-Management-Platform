@@ -177,6 +177,14 @@ export interface Recommendation {
   model: string
 }
 
+/** AI suggestion for the approver. Advice only: the approver decides. */
+export interface ApprovalAdvice {
+  suggestion: 'approve' | 'reject' | 'forward'
+  rationale: string
+  checks: string[]
+  model: string
+}
+
 export interface Approval {
   id: string
   request_id: string
@@ -200,6 +208,7 @@ export interface Approval {
   self_approved: boolean
   /** The Director raised this request: they can approve only with a justification. */
   needs_self_override: boolean
+  advice: ApprovalAdvice | null
   stale: boolean
   stale_reason: string | null
   risk_level: RiskLevel | null

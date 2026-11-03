@@ -13,6 +13,21 @@ from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
 
+
+def ist_label(value: datetime | str | None) -> str | None:
+    """'4 Nov 2026, 3:30 PM IST' for emails and LLM facts (stored times are UTC)."""
+    if value is None:
+        return None
+    try:
+        dt = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    except ValueError:
+        return str(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    local = dt.astimezone(IST)
+    return f"{local.day} {local:%b %Y}, {local.hour % 12 or 12}:{local:%M %p} IST"
+
+
 CITY_REGION: dict[str, str] = {
     "Pune": "West",
     "Mumbai": "West",

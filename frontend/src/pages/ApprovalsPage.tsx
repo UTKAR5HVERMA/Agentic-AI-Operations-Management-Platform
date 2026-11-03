@@ -13,6 +13,8 @@ import { formatInr, formatIst } from '@/lib/format'
 import { ROLE_LABEL } from '@/lib/labels'
 import type { Approval } from '@/lib/types'
 
+const ADVICE_LABEL = { approve: 'Approve', reject: 'Reject', forward: 'Forward' } as const
+
 function InboxTable({ rows, decided }: { rows: Approval[]; decided: boolean }) {
   if (rows.length === 0)
     return (
@@ -82,7 +84,17 @@ function InboxTable({ rows, decided }: { rows: Approval[]; decided: boolean }) {
               {decided ? (
                 <span className="text-xs">{a.decision_note ?? '—'}</span>
               ) : (
-                <ApprovalDecision a={a} />
+                <>
+                  {a.advice && (
+                    <p className="mb-1 max-w-64 text-xs" title={a.advice.rationale}>
+                      <span className="font-bold">
+                        AI suggests: {ADVICE_LABEL[a.advice.suggestion]}
+                      </span>
+                      <span className="text-ink-muted"> · advice only</span>
+                    </p>
+                  )}
+                  <ApprovalDecision a={a} />
+                </>
               )}
             </Td>
           </Tr>

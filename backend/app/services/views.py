@@ -138,6 +138,7 @@ def approval(a: Approval, user: User) -> ApprovalOut:
         routing_note=a.routing_note,
         self_approved=bool(a.self_approved),
         needs_self_override=rbac.needs_self_override(user, a, case),
+        advice=a.advice,
         stale=a.stale,
         stale_reason=a.stale_reason,
         risk_level=_risk_level(case),

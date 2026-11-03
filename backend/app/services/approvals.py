@@ -29,7 +29,7 @@ from app.enums import (
 )
 from app.errors import ApiError, bad_request, conflict, not_found
 from app.models import Approval, Case, Recommendation, User
-from app.services import communications, inventory
+from app.services import approval_advice, communications, inventory
 from app.services.analysis import run_analysis
 from app.state_machine import transition
 
@@ -175,6 +175,7 @@ def _request_step(
     )
     db.add(approval)
     db.flush()
+    db.refresh(approval, ["assigned_to"])
     audit.log_event(
         db,
         action="approval.requested",
@@ -192,6 +193,7 @@ def _request_step(
         },
         reason="; ".join(reasons),
     )
+    advice = approval_advice.refresh(db, approval, reason="Approval requested")
     communications.notify(
         db,
         case,
@@ -202,6 +204,7 @@ def _request_step(
         reasons=reasons,
         due_at=approval.due_at,
         routing_note=note,
+        ai_suggestion=approval_advice.summary_line(advice),
         **communications.original_request(case),
     )
     return approval
@@ -400,6 +403,9 @@ def escalate(
     )
     if not forwarded:
         _bump_priority(db, case, actor, actor_type)
+    db.flush()
+    db.refresh(approval, ["assigned_to"])
+    advice = approval_advice.refresh(db, approval, reason=f"Moved up to the {target} ({note})")
     communications.notify(
         db,
         case,
@@ -410,6 +416,9 @@ def escalate(
         previous_due=previous_due,
         level=approval.escalation_level,
         due_at=approval.due_at,
+        escalation_reason=note,
+        forwarded_by_manager=forwarded,
+        ai_suggestion=approval_advice.summary_line(advice),
     )
     if case.status == Status.PENDING_APPROVAL:
         transition(

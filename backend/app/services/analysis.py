@@ -46,7 +46,7 @@ from app.models import (
     RiskAssessment,
     Supplier,
 )
-from app.services import inventory
+from app.services import approval_advice, inventory
 from app.state_machine import TERMINAL, transition
 
 log = logging.getLogger(__name__)
@@ -275,6 +275,7 @@ def _mark_approvals_stale(db: Session, case: Case, reason: str, actor: str) -> N
                 after={"approval_id": approval.id},
                 reason=reason,
             )
+            approval_advice.refresh(db, approval, reason=f"Case changed: {reason}")
 
 
 def _persist(db: Session, case: Case, out: CaseState, *, start_at: str, preserve: bool) -> None:
