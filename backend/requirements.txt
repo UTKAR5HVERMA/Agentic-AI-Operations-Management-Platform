@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0
+pydantic>=2
+pydantic-settings
+langgraph
+openai
+pyjwt
+python-multipart
+psycopg[binary]
+pytest
+httpx
+ruff

@@ -1,1 +1,79 @@
-/venv
+# ---------------------------------------------------------------------------
+# Internal docs (specs, AI-assistant notes, assessment brief) — kept local only.
+# README.md is the only Markdown file that is published.
+# ---------------------------------------------------------------------------
+*.md
+!/README.md
+/Assignment_*.pdf
+
+# ---------------------------------------------------------------------------
+# Secrets & environment — never commit
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+/venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local databases (tests and dev use SQLite files)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ---------------------------------------------------------------------------
+# Frontend (Node / Vite / TypeScript)
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Frontend build copied into the backend for the single-image deploy
+backend/app/static/
+
+# ---------------------------------------------------------------------------
+# Logs & temp files
+# ---------------------------------------------------------------------------
+logs/
+*.log
+*.tmp
+*.bak
+
+# ---------------------------------------------------------------------------
+# Editors & OS
+# ---------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.claude/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

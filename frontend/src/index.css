@@ -1,0 +1,54 @@
+@import 'tailwindcss';
+
+/* EY-inspired design tokens (FRONTEND.md §9). One accent: signature yellow. */
+@theme {
+  --font-sans: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+
+  --color-ink: #2e2e38;
+  --color-ink-soft: #3a3a4a;
+  --color-ink-muted: #747480;
+  --color-accent: #ffe600;
+  --color-accent-strong: #f5d800;
+  --color-page: #f6f6fa;
+  --color-line: #e1e1e6;
+  --color-line-strong: #c4c4cd;
+
+  --color-ok: #168736;
+  --color-warn: #ff9831;
+  --color-bad: #ea011b;
+  --color-info: #188ce5;
+  --color-teal: #27acaa;
+  --color-violet: #724bc3;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-page font-sans text-sm text-ink antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-bold tracking-tight text-ink;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+@keyframes pulse-soft {
+  50% {
+    opacity: 0.55;
+  }
+}
+.animate-pulse-soft {
+  animation: pulse-soft 1.4s ease-in-out infinite;
+}
