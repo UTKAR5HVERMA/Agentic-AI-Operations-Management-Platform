@@ -11,7 +11,7 @@ is written to a hash-chained audit trail.
 
 | | |
 |---|---|
-| **Live app** | `<add live URL>` |
+| **Live app** | `https://137-23-60-59.sslip.io` |
 | **Demo password** | `Demo@123` (all accounts) |
 | **Stack** | FastAPI · SQLAlchemy · LangGraph · Postgres · React 18 + TypeScript · Vite · Tailwind · TanStack Query |
 | **LLM** | Groq `openai/gpt-oss-120b` via the OpenAI-compatible API (any OpenAI-compatible provider works) |
